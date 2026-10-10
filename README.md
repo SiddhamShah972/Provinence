@@ -44,7 +44,7 @@ flowchart TD
     G -->|Offset Checks| H{Ledger Valid?}
     end
     
-    H -- No -->|Re-Extract| E
+    H -- No: Re-Extract --> E
     H -- Yes --> I[Dossier Synthesis]
     I --> J([Final PDF / Markdown Dossier])
     

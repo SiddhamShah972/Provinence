@@ -226,37 +226,40 @@ if st.session_state.state and st.session_state.state.get("final_report"):
                 st.markdown(user_query)
 
             with st.chat_message("assistant"):
-                topic = state.get("topic", "Target")
-                findings = state.get("findings", [])
-                discovered = state.get("discovered_urls", [])
+                with st.spinner("Analyzing verified dossier & formulating response..."):
+                    from provenance_engine.llm_router import default_router, TaskType
 
-                # Grounded answer synthesis
-                prompt_lower = user_query.lower()
-                if "source" in prompt_lower or "reference" in prompt_lower or "url" in prompt_lower or "link" in prompt_lower:
-                    ans = f"### 📚 Discovered Sources ({len(discovered)} total):\n\n"
-                    for idx, d in enumerate(discovered, 1):
-                        ans += f"{idx}. **[{d.get('title', 'Unknown')}]({d.get('url')})**  \n   🔗 `{d.get('url')}`\n\n"
-                elif "confidence" in prompt_lower or "score" in prompt_lower or "calibrat" in prompt_lower:
-                    ans = (
-                        "### 🛡️ Calibration & Integrity Metrics\n\n"
-                        "- **Calibrated Confidence**: 91.2% (via Platt-scaled Empirical Calibration Error $\\le 0.038$)\n"
-                        f"- **Verified Claims**: {len(findings)} atomic statements with 100% verbatim character offset grounding.\n"
-                        "- **Sybil Resistance**: Sources were clustered across independent publisher domains to eliminate echo-chamber amplification."
+                    topic = state.get("topic", "Target")
+                    findings = state.get("findings", [])
+                    discovered = state.get("discovered_urls", [])
+                    final_report = state.get("final_report", "")
+
+                    prompt = f"""You are the Provenance Intelligence Assistant. Answer the user's question directly, accurately, and thoroughly, grounding your explanation strictly in the research dossier for '{topic}'.
+
+RESEARCH TOPIC: {topic}
+
+DOSSIER TEXT:
+{final_report[:3500]}
+
+USER QUESTION: {user_query}
+
+Provide a direct, natural-language explanation answering the question clearly. Reference verified findings, engineering mechanisms, or primary sources where appropriate. Avoid repetitive boilerplate templates."""
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    resp = loop.run_until_complete(
+                        default_router.generate(
+                            task=TaskType.DOSSIER_QA,
+                            prompt=prompt,
+                            context_data={
+                                "topic": topic,
+                                "query": user_query,
+                                "findings": findings,
+                                "discovered": discovered,
+                            }
+                        )
                     )
-                elif "claim" in prompt_lower or "finding" in prompt_lower or "fact" in prompt_lower:
-                    ans = f"### 🔍 Key Verified Claims for **{topic}**:\n\n"
-                    for idx, f in enumerate(findings[:6], 1):
-                        ans += f"- **Claim {idx}**: {f.get('statement')}  \n  *Source*: `{f.get('source_url', 'N/A')}`\n\n"
-                else:
-                    ans = f"### Findings Regarding: *\"{user_query}\"*\n\n"
-                    ans += f"Based on the investigation into **{topic}**, the dossier established {len(findings)} offset-grounded facts across {len(discovered)} primary sources.\n\n"
-                    relevant_claims = [f for f in findings if any(w in f.get('statement', '').lower() for w in user_query.lower().split() if len(w) > 3)]
-                    if not relevant_claims:
-                        relevant_claims = findings[:3]
-                    for idx, f in enumerate(relevant_claims, 1):
-                        ans += f"**{idx}. Assertion**: {f.get('statement')}\n\n"
-                        ans += f"> *Quote*: \"{f.get('quote')}\"\n\n"
-                        ans += f"*Source*: [{f.get('source_url')}]({f.get('source_url')})\n\n"
+                    ans = resp.content if resp and resp.content else "Unable to formulate response."
 
                 st.markdown(ans)
                 st.session_state.chat_messages.append({"role": "assistant", "content": ans})

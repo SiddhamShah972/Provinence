@@ -77,32 +77,45 @@ class MultiSiloHarvester:
         return results
 
     @classmethod
+    async def search_wikipedia(cls, query: str, limit: int = 5) -> List[Dict[str, str]]:
+        """Queries the official Wikipedia OpenSearch API for authoritative encyclopedia articles."""
+        results: List[Dict[str, str]] = []
+        try:
+            encoded_query = urllib.parse.quote(query)
+            endpoint = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={encoded_query}&limit={limit}&format=json"
+            wiki_headers = {"User-Agent": "ProvenanceEngine/1.0 (security@provenance-research.local)"}
+            async with httpx.AsyncClient(timeout=8.0, headers=wiki_headers) as client:
+                resp = await client.get(endpoint)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    titles = data[1] if len(data) > 1 else []
+                    urls = data[3] if len(data) > 3 else []
+                    for t, u in zip(titles, urls):
+                        if t and u:
+                            results.append({"title": f"[Wikipedia] {t}", "url": u, "source": "wikipedia"})
+        except Exception as e:
+            logger.warning(f"Wikipedia search error for '{query}': {e}")
+        return results
+
+    @classmethod
     async def harvest_all(cls, query: str, limit: int = 12) -> List[Dict[str, str]]:
-        """Executes concurrent multi-silo discovery, returning deduplicated candidate URLs."""
+        """Executes concurrent multi-silo discovery across DuckDuckGo, HN, and Wikipedia."""
         import asyncio
         ddg_task = cls.search_duckduckgo(query, limit=limit)
         hn_task = cls.search_hacker_news(query, limit=5)
+        wiki_task = cls.search_wikipedia(query, limit=4)
 
-        ddg_res, hn_res = await asyncio.gather(ddg_task, hn_task, return_exceptions=True)
+        ddg_res, hn_res, wiki_res = await asyncio.gather(ddg_task, hn_task, wiki_task, return_exceptions=True)
 
         combined: List[Dict[str, str]] = []
         seen_urls = set()
 
-        for item_list in (ddg_res, hn_res):
+        for item_list in (ddg_res, hn_res, wiki_res):
             if isinstance(item_list, list):
                 for item in item_list:
                     u = item["url"]
                     if u not in seen_urls:
                         seen_urls.add(u)
                         combined.append(item)
-
-        # Fallback if external networks are fully unreachable
-        if not combined:
-            slug = "".join(c if c.isalnum() else "_" for c in query.lower())[:30].strip("_")
-            combined = [
-                {"title": f"{query} - Technical Overview & Specifications", "url": f"https://en.wikipedia.org/wiki/{slug}", "source": "wikipedia_fallback"},
-                {"title": f"{query} - Industry Benchmark Report", "url": f"https://arxiv.org/abs/2401.{slug[:5]}", "source": "arxiv_fallback"},
-                {"title": f"{query} - Engineering Analysis & Discussion", "url": f"https://news.ycombinator.com/item?id=3891234", "source": "hn_fallback"},
-            ]
 
         return combined[:limit]

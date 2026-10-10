@@ -4,7 +4,7 @@
 
     basic_auth {
         # Format: <username> <bcrypt_hash>
-        admin $2a$14$48QfBXldNyXZhT6/rPs1D.0js5aK.FW.09uhB4tAEpfW1Y7PHc8Xq
+        admin $2a$14$t.FswgIaugqn6uScTScnl.kUntu9SxVV5q.e5s/CRPVOjdat5fswe
     }
 
     reverse_proxy provenance-app:8501 {

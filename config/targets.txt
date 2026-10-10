@@ -1,0 +1,5 @@
+Log4j vulnerability CVE-2021-44228 impact on enterprise Java stacks
+Apache Struts CVE-2017-5638 Equifax breach post-mortem
+SolarWinds SUNBURST supply chain attack infrastructure
+Colonial Pipeline DarkSide ransomware attribution
+Kaseya VSA REvil ransomware supply chain attack

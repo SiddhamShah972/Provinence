@@ -1,3 +1,6 @@
+volumes:
+  caddy_data:
+
 services:
   # 1. Main Provenance Engine & Dashboard
   provenance-app:
@@ -5,8 +8,6 @@ services:
       context: .
       dockerfile: deploy/scraper.Dockerfile
     container_name: provenance_dashboard
-    ports:
-      - "8501:8501"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}
@@ -31,6 +32,22 @@ services:
     restart: unless-stopped
     networks:
       - provenance_net
+
+  # 3. Caddy Reverse Proxy & Auth (External Access)
+  caddy:
+    image: caddy:alpine
+    container_name: provenance_proxy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      - provenance_net
+    depends_on:
+      - provenance-app
 
   # 2. Local Isolated SearXNG Instance (Zero-Auth Search Fallback)
   searxng:

@@ -57,7 +57,6 @@ def setup_audit_telemetry(log_dir: str | Path = "output/audit_logs") -> None:
     
     # Add console output (optional for production, useful for CLI)
     logger.add(
-        importlib=False,  # prevent dynamic import issues
         sink=lambda msg: print(msg, end=""),
         filter=secret_scrubber_filter,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",

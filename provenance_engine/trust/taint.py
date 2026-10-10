@@ -116,10 +116,18 @@ class TaintGate:
                 )
 
 
+from uuid import uuid4
+
+
 class TaintedArtifact(BaseModel):
+    id: str = Field(default_factory=lambda: f"art_{uuid4().hex[:8]}")
     content: str
     source: str
     is_tainted: bool = True
+
+
+# Alias for compatibility with OSINT handler schemas
+TaintedRecord = TaintedArtifact
 
 
 class TaintTracker:

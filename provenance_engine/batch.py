@@ -183,7 +183,7 @@ async def run_batch(queries: list[str], output_dir: str, concurrency: int = 2):
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run batch deep research investigations.")
-    parser.add_argument("-i", "--input-csv", type=str, help="CSV file containing queries in the first column.")
+    parser.add_argument("-i", "--input-csv", "--file", type=str, help="CSV or text file containing queries in the first column/line.")
     parser.add_argument("-q", "--queries", type=str, nargs="+", help="Space-separated list of target queries.")
     parser.add_argument("-o", "--output-dir", type=str, default="output/batch", help="Output directory for batch results.")
     parser.add_argument("-c", "--concurrency", type=int, default=2, help="Max concurrent investigations.")
@@ -193,6 +193,9 @@ def parse_arguments() -> argparse.Namespace:
 def main():
     args = parse_arguments()
     queries = []
+    
+    from provenance_engine.audit.log import setup_audit_telemetry
+    setup_audit_telemetry(args.output_dir)
     
     if args.queries:
         queries.extend(args.queries)

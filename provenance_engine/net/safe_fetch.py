@@ -166,3 +166,6 @@ class SafeFetch:
 
 # Global default SafeFetch client
 safe_fetch = SafeFetch()
+
+# Alias for asynchronous fetcher compatibility
+SafeAsyncFetcher = SafeFetch

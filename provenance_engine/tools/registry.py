@@ -59,6 +59,17 @@ class ToolRegistry:
                 raise ValueError(f"Tool invocation argument validation failed: {e.message}") from e
         return True
 
+    async def execute(self, invocation: ToolInvocation, taint_tracker: Optional[Any] = None) -> Dict[str, Any]:
+        self.validate(invocation)
+        if invocation.tool_name == "osint.query":
+            from provenance_engine.trust.taint import TaintTracker
+            tracker = taint_tracker or TaintTracker()
+            source = invocation.arguments.get("source", "")
+            target = invocation.arguments.get("target", "")
+            return await execute_osint_tool(source=source, target=target, taint_tracker=tracker)
+        raise NotImplementedError(f"Direct execution for tool '{invocation.tool_name}' is handled via router.")
+
+
     def list_all(self) -> List[ToolDefinition]:
         return list(self._tools.values())
 
@@ -72,6 +83,39 @@ class ToolRegistry:
         max_idx = order.index(max_risk)
         allowed_tiers = set(order[: max_idx + 1])
         return [t for t in self._tools.values() if t.risk_tier in allowed_tiers]
+
+
+async def execute_osint_tool(source: str, target: str, taint_tracker: Any) -> Dict[str, Any]:
+    from provenance_engine.tools.handlers.public_records import SECEdgarClient, ArchiveCDXClient
+    import json
+    raw_text = ""
+    
+    if source == "edgar_api":
+        client = SECEdgarClient()
+        data = await client.get_company_filings(cik=target)
+        raw_text = json.dumps(data)
+        
+    elif source == "archive_cdx":
+        client = ArchiveCDXClient()
+        snapshots = await client.get_domain_snapshots(domain=target)
+        raw_text = json.dumps(snapshots)
+        
+    else:
+        raise NotImplementedError(f"Handler for source '{source}' is not configured.")
+
+    # Invariant: External OSINT records must be registered as untrusted
+    tainted_artifact = taint_tracker.record_artifact(
+        content=raw_text,
+        source=f"osint:{source}",
+        trusted=False
+    )
+
+    return {
+        "status": "success",
+        "record_id": tainted_artifact.id,
+        "is_tainted": tainted_artifact.is_tainted,
+        "payload": raw_text
+    }
 
 
 # Instantiate global registry with baseline OSINT tools
@@ -94,6 +138,41 @@ tool_registry.register(
         keywords=["fetch", "download", "http", "url", "scrape", "crawl", "webpage"],
         risk_tier=RiskTier.EXTERNAL_IO,
         parameters_schema={"url": {"type": "string"}},
+    )
+)
+
+tool_registry.register(
+    ToolDefinition(
+        name="osint.query",
+        namespace="osint",
+        description="Queries public threat, certificate, infrastructure, and attribution silos.",
+        keywords=["crt_sh", "hacker_news", "shodan", "censys", "edgar", "cdx", "archive"],
+        risk_tier=RiskTier.EXTERNAL_IO,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "crt_sh", 
+                        "hacker_news", 
+                        "wikidata", 
+                        "shodan_api", 
+                        "censys_api", 
+                        "edgar_api", 
+                        "archive_cdx"
+                    ]
+                },
+                "target": {"type": "string", "maxLength": 120}
+            },
+            "required": ["source", "target"],
+            "additionalProperties": False
+        },
+        examples=[
+            "lookup subdomains for domain via crt_sh",
+            "find open ports for ip via shodan_api",
+            "retrieve corporate officers from edgar_api"
+        ]
     )
 )
 

@@ -181,6 +181,60 @@ async def run_batch(queries: list[str], output_dir: str, concurrency: int = 2):
     logger.info(f"Batch execution finished. {completed_count}/{len(queries)} completed. Manifest written to {manifest_path}")
 
 
+import signal
+
+shutdown_event = asyncio.Event()
+
+
+def register_signal_handlers():
+    """Binds SIGINT and SIGTERM handlers to coordinate graceful batch shutdowns."""
+    def _handle_signal(signum, frame):
+        try:
+            sig_name = signal.Signals(signum).name
+        except Exception:
+            sig_name = str(signum)
+        logger.warning(
+            f"Received {sig_name}. Gracefully finishing current in-flight investigations and flushing manifests before exit..."
+        )
+        shutdown_event.set()
+
+    for sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)):
+        if sig is not None:
+            try:
+                signal.signal(sig, _handle_signal)
+            except (ValueError, AttributeError, RuntimeError):
+                pass
+
+
+def prune_stale_artifacts(base_dir: str | Path, max_days: int = 30) -> None:
+    """
+    Cleans up telemetry files, temporary compiler files, and old artifacts older than max_days
+    to enforce deterministic volume retention quotas.
+    """
+    try:
+        cutoff_sec = time.time() - (max_days * 86400)
+        target_path = Path(base_dir)
+        if not target_path.exists():
+            return
+
+        pruned_count = 0
+        for item in target_path.rglob("*"):
+            if item.is_file():
+                # Prune log/tmp files or older snapshots based on modification time
+                if item.suffix in (".log", ".tmp", ".jsonl") or "cdx_cache" in str(item):
+                    if item.stat().st_mtime < cutoff_sec:
+                        try:
+                            item.unlink()
+                            pruned_count += 1
+                        except OSError:
+                            pass
+
+        if pruned_count > 0:
+            logger.info(f"Retention policy executed: Pruned {pruned_count} files older than {max_days} days.")
+    except Exception as e:
+        logger.warning(f"Retention cleaner encountered error: {e}")
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run batch deep research investigations.")
     parser.add_argument("-i", "--input-csv", "--file", type=str, help="CSV or text file containing queries in the first column/line.")
@@ -189,21 +243,40 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-c", "--concurrency", type=int, default=2, help="Max concurrent investigations.")
     parser.add_argument("--watch", action="store_true", help="Run batch recurringly on an interval schedule.")
     parser.add_argument("--interval-seconds", type=int, default=3600, help="Interval in seconds between reconnaissance cycles in watch mode.")
+    parser.add_argument("--retention-days", type=int, default=30, help="Days to retain historical telemetry and cache before automated pruning.")
     return parser.parse_args()
 
 
 async def main_async(args, queries):
+    register_signal_handlers()
+
     if args.watch:
-        logger.info(f"Starting recurring surveillance mode. Interval: {args.interval_seconds}s")
+        logger.info(f"Starting recurring surveillance mode. Interval: {args.interval_seconds}s (Graceful SIGTERM/SIGINT enabled)")
         iteration = 1
-        while True:
+        while not shutdown_event.is_set():
             logger.info(f"--- Watch Reconnaissance Cycle #{iteration} ---")
             await run_batch(queries, args.output_dir, args.concurrency)
+
+            # Apply retention cleaner after every cycle
+            if args.retention_days > 0:
+                prune_stale_artifacts(args.output_dir, max_days=args.retention_days)
+
             iteration += 1
-            logger.info(f"Surveillance cycle sleeping for {args.interval_seconds} seconds...")
-            await asyncio.sleep(args.interval_seconds)
+            if shutdown_event.is_set():
+                break
+
+            logger.info(f"Surveillance cycle sleeping for {args.interval_seconds}s. Send SIGTERM / Ctrl+C to terminate cleanly.")
+            try:
+                await asyncio.wait_for(shutdown_event.wait(), timeout=args.interval_seconds)
+                break
+            except asyncio.TimeoutError:
+                pass
+
+        logger.info("Graceful shutdown confirmed. All in-flight manifests flushed.")
     else:
         await run_batch(queries, args.output_dir, args.concurrency)
+        if args.retention_days > 0:
+            prune_stale_artifacts(args.output_dir, max_days=args.retention_days)
 
 
 def main():

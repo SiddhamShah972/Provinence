@@ -8,6 +8,7 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional
 import httpx
+from loguru import logger
 
 from provenance_engine.net.safe_fetch import SafeAsyncFetcher
 from provenance_engine.trust.taint import TaintTracker, TaintedRecord
@@ -23,14 +24,19 @@ class SECEdgarClient:
     _ticker_cache: Dict[str, str] = {}
     _title_cache: Dict[str, str] = {}
 
-    def __init__(self, user_agent: str = "ProvenanceResearchEngine (security@provenance-research.local)") -> None:
+    def __init__(self, user_agent: Optional[str] = None) -> None:
+        import os
+        ua = user_agent or os.getenv(
+            "SEC_USER_AGENT",
+            "ProvenanceResearchEngine (security@provenance-research.local)"
+        )
         self.headers = {
-            "User-Agent": user_agent,
+            "User-Agent": ua,
             "Accept-Encoding": "gzip, deflate",
             "Host": "data.sec.gov"
         }
         self.sec_gov_headers = {
-            "User-Agent": user_agent,
+            "User-Agent": ua,
             "Accept-Encoding": "gzip, deflate",
             "Host": "www.sec.gov"
         }
@@ -94,11 +100,18 @@ class SECEdgarClient:
 
         endpoint = f"{self.BASE_URL}/submissions/CIK{cik}.json"
 
-        async with self._rate_limiter:
-            async with httpx.AsyncClient(timeout=15.0, headers=self.headers) as client:
-                response = await client.get(endpoint)
-                response.raise_for_status()
-                return response.json()
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            async with self._rate_limiter:
+                async with httpx.AsyncClient(timeout=15.0, headers=self.headers) as client:
+                    response = await client.get(endpoint)
+                    if response.status_code in (429, 403) and attempt < max_attempts:
+                        backoff = attempt * 3.0
+                        logger.warning(f"SEC returned {response.status_code}. Backing off for {backoff}s (Attempt {attempt}/{max_attempts})")
+                        await asyncio.sleep(backoff)
+                        continue
+                    response.raise_for_status()
+                    return response.json()
 
 
 class ArchiveCDXClient:

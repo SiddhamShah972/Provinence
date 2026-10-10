@@ -1,0 +1,42 @@
+{
+  "blocked_hostnames": [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "::1",
+    "metadata.google.internal",
+    "169.254.169.254",
+    "instance-data",
+    "ip6-localhost",
+    "ip6-loopback"
+  ],
+  "blocked_cidr_ranges": [
+    "127.0.0.0/8",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "169.254.0.0/16",
+    "100.64.0.0/10",
+    "0.0.0.0/8",
+    "224.0.0.0/4",
+    "240.0.0.0/4",
+    "::1/128",
+    "fc00::/7",
+    "fe80::/10",
+    "::ffff:0:0/96"
+  ],
+  "disallowed_schemes": [
+    "file",
+    "gopher",
+    "ftp",
+    "data",
+    "javascript",
+    "about",
+    "blob",
+    "view-source"
+  ],
+  "malicious_tlds": [
+    ".zip",
+    ".mov"
+  ]
+}

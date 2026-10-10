@@ -1,0 +1,30 @@
+name: Provenance Security & Acceptance CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  security-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run Deterministic Acceptance Suite
+        run: |
+          python -m pytest tests/test_acceptance.py tests/test_adversarial_resilience.py tests/test_osint_integration.py -v --tb=short

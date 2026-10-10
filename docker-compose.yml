@@ -1,0 +1,57 @@
+services:
+  # 1. Main Provenance Engine & Dashboard
+  provenance-app:
+    build:
+      context: .
+      dockerfile: deploy/scraper.Dockerfile
+    container_name: provenance_dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - SEARXNG_URL=http://searxng:8080
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./output:/app/output:rw
+      - ./ui:/app/ui:ro
+      - ./provenance_engine:/app/provenance_engine:ro
+      - ./config:/app/config:ro
+      - ./tests:/app/tests:ro
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:config/seccomp-strict.json
+    cap_drop:
+      - ALL
+    read_only: false
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    depends_on:
+      - searxng
+    restart: unless-stopped
+    networks:
+      - provenance_net
+
+  # 2. Local Isolated SearXNG Instance (Zero-Auth Search Fallback)
+  searxng:
+    image: searxng/searxng:latest
+    container_name: provenance_searxng
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - provenance_net
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+
+networks:
+  provenance_net:
+    driver: bridge

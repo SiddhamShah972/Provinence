@@ -40,7 +40,7 @@ with st.sidebar:
     st.markdown("### 🔒 Security Status")
     st.success("SSRF Fortress: Active")
     st.success("Taint Tracking: Enabled")
-    st.success("Dual-Tier LLM: Flash / Pro 3.1 High")
+    st.success("LLM Engine: Gemini 3.8 Flash Active")
     
     run_btn = st.button("🚀 Start Investigation", type="primary", use_container_width=True)
 
@@ -122,7 +122,7 @@ if st.session_state.state and not auto_approve and not st.session_state.checkpoi
                     {"human_approved": True},
                     as_node="human_review"
                 )
-                with st.spinner("Synthesizing report & validating claims via Pro 3.1 High Thinking..."):
+                with st.spinner("Synthesizing report & validating claims via Gemini 3.8 Flash..."):
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     loop.run_until_complete(execute_graph_step(None, st.session_state.thread_config))

@@ -117,17 +117,16 @@ class LLMRouter:
             )
 
         # Real API execution
-        candidate_models = [model_name]
-        if tier == ModelTier.PRO_HIGH_REASONING:
-            candidate_models.extend(["gemini-3-flash-preview", "gemini-flash-latest"])
-        else:
-            candidate_models.extend(["gemini-3-flash-preview", "gemini-flash-latest", "gemini-2.5-flash-lite"])
+        # Prioritize Gemini 3.8 Flash for high-speed synthesis and quota stability
+        candidate_models = ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-flash-latest", "gemini-2.5-flash-lite"]
+        if model_name not in candidate_models:
+            candidate_models.append(model_name)
 
         from google.genai import types
 
         for c_idx, candidate in enumerate(candidate_models):
             try:
-                if tier == ModelTier.PRO_HIGH_REASONING and candidate == model_name:
+                if tier == ModelTier.PRO_HIGH_REASONING and "pro" in candidate:
                     # Rigorous deterministic reasoning tier with high thinking budget
                     config = types.GenerateContentConfig(
                         temperature=0.0,
@@ -135,9 +134,9 @@ class LLMRouter:
                         thinking_config=types.ThinkingConfig(thinking_budget=16384),
                     )
                 else:
-                    # Fast flash extraction/search tier
+                    # High-throughput flash synthesis/extraction tier
                     config = types.GenerateContentConfig(
-                        temperature=0.2,
+                        temperature=0.0 if tier == ModelTier.PRO_HIGH_REASONING else 0.2,
                         system_instruction=system_instruction,
                     )
 

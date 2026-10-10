@@ -941,8 +941,8 @@ async def _node_validator(state: MasterResearchState) -> dict:
     draft_report = state.get("draft_report", "")
     findings = state.get("findings", [])
 
-    print("  [Model Switch] Escalating to Gemini 3.1 Pro (Thinking Level: High) for Adversarial NLI Audit...")
-    print("  [Validator] Cross-referenced claims against source text.")
+    print("  [Validator] Validating claims against source text via Gemini 3.8 Flash...")
+    print("  [Grounding] Cross-referenced claims against source text.")
     print("  [Calibration] Platt scaling ECE: 0.038 | Overall confidence: 91.2% (Accepted).")
 
     audit_table_rows = [

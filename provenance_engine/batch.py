@@ -187,7 +187,23 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-q", "--queries", type=str, nargs="+", help="Space-separated list of target queries.")
     parser.add_argument("-o", "--output-dir", type=str, default="output/batch", help="Output directory for batch results.")
     parser.add_argument("-c", "--concurrency", type=int, default=2, help="Max concurrent investigations.")
+    parser.add_argument("--watch", action="store_true", help="Run batch recurringly on an interval schedule.")
+    parser.add_argument("--interval-seconds", type=int, default=3600, help="Interval in seconds between reconnaissance cycles in watch mode.")
     return parser.parse_args()
+
+
+async def main_async(args, queries):
+    if args.watch:
+        logger.info(f"Starting recurring surveillance mode. Interval: {args.interval_seconds}s")
+        iteration = 1
+        while True:
+            logger.info(f"--- Watch Reconnaissance Cycle #{iteration} ---")
+            await run_batch(queries, args.output_dir, args.concurrency)
+            iteration += 1
+            logger.info(f"Surveillance cycle sleeping for {args.interval_seconds} seconds...")
+            await asyncio.sleep(args.interval_seconds)
+    else:
+        await run_batch(queries, args.output_dir, args.concurrency)
 
 
 def main():
@@ -222,7 +238,7 @@ def main():
         
     logger.info(f"Loaded {len(queries)} queries for batch processing. Concurrency limit: {args.concurrency}")
     
-    asyncio.run(run_batch(queries, args.output_dir, args.concurrency))
+    asyncio.run(main_async(args, queries))
 
 
 if __name__ == "__main__":

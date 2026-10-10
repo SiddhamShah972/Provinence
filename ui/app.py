@@ -61,10 +61,14 @@ async def execute_graph_step(initial_state, thread_config):
     return events
 
 
+import uuid
+
 # --- MAIN WORKFLOW TRIGGER ---
 if run_btn and query:
     st.session_state.checkpoint_reached = False
-    thread_id = f"ui-session-{abs(hash(query))}"
+    st.session_state.state = None
+    st.session_state.chat_messages = []
+    thread_id = f"ui-session-{uuid.uuid4().hex[:8]}"
     st.session_state.thread_config = {"configurable": {"thread_id": thread_id}}
     
     initial_state: MasterResearchState = {
